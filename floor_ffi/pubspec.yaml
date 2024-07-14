@@ -7,7 +7,7 @@ homepage: https://floor.codes
 publish_to: none
 
 environment:
-  sdk: '>=3.2.6 <4.0.0'
+  sdk: '>=3.2.2 <4.0.0'
 
 dependencies:
   floor_annotation:
