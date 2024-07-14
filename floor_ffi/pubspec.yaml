@@ -21,5 +21,5 @@ dependencies:
       ref: develop
       path: floor_common   
   meta:
-  path: ^1.9.0
+  path: ^1.8.3
   sqflite_common_ffi: ^2.3.2+1
