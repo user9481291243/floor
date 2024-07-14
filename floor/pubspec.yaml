@@ -26,7 +26,7 @@ dependencies:
   flutter:
     sdk: flutter
   meta:
-  path: ^1.9.0
+  path: ^1.8.3
   sqflite: ^2.3.2
   sqflite_common_ffi: ^2.3.2+1
   sqflite_common_ffi_web: ^0.4.3
