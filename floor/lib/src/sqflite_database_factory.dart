@@ -7,6 +7,7 @@ import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 // infers factory as nullable without explicit type definition
 final DatabaseFactory sqfliteDatabaseFactory = () {
+  return databaseFactory; //test
   if (kIsWeb) {
     return databaseFactoryFfiWeb;
   } else if (Platform.isAndroid || Platform.isIOS) {
