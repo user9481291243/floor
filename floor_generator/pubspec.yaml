@@ -18,7 +18,10 @@ dependencies:
   code_builder: ^4.10.0
   collection: ^1.18.0
   floor_annotation:
-    path: ../floor_annotation
+  git:
+    url: https://github.com/user9481291243/floor.git
+    ref: develop
+    path: floor_annotation  
   meta:
   source_gen: ^1.5.0
   strings: ^3.1.1
