@@ -6,20 +6,32 @@ part of 'database.dart';
 // FloorGenerator
 // **************************************************************************
 
+abstract class $FlutterDatabaseBuilderContract {
+  /// Adds migrations to the builder.
+  $FlutterDatabaseBuilderContract addMigrations(List<Migration> migrations);
+
+  /// Adds a database [Callback] to the builder.
+  $FlutterDatabaseBuilderContract addCallback(Callback callback);
+
+  /// Creates the database and initializes it.
+  Future<FlutterDatabase> build();
+}
+
+// ignore: avoid_classes_with_only_static_members
 class $FloorFlutterDatabase {
   /// Creates a database builder for a persistent database.
   /// Once a database is built, you should keep a reference to it and re-use it.
-  static _$FlutterDatabaseBuilder databaseBuilder(String name) =>
+  static $FlutterDatabaseBuilderContract databaseBuilder(String name) =>
       _$FlutterDatabaseBuilder(name);
 
   /// Creates a database builder for an in memory database.
   /// Information stored in an in memory database disappears when the process is killed.
   /// Once a database is built, you should keep a reference to it and re-use it.
-  static _$FlutterDatabaseBuilder inMemoryDatabaseBuilder() =>
+  static $FlutterDatabaseBuilderContract inMemoryDatabaseBuilder() =>
       _$FlutterDatabaseBuilder(null);
 }
 
-class _$FlutterDatabaseBuilder {
+class _$FlutterDatabaseBuilder implements $FlutterDatabaseBuilderContract {
   _$FlutterDatabaseBuilder(this.name);
 
   final String? name;
@@ -28,19 +40,19 @@ class _$FlutterDatabaseBuilder {
 
   Callback? _callback;
 
-  /// Adds migrations to the builder.
-  _$FlutterDatabaseBuilder addMigrations(List<Migration> migrations) {
+  @override
+  $FlutterDatabaseBuilderContract addMigrations(List<Migration> migrations) {
     _migrations.addAll(migrations);
     return this;
   }
 
-  /// Adds a database [Callback] to the builder.
-  _$FlutterDatabaseBuilder addCallback(Callback callback) {
+  @override
+  $FlutterDatabaseBuilderContract addCallback(Callback callback) {
     _callback = callback;
     return this;
   }
 
-  /// Creates the database and initializes it.
+  @override
   Future<FlutterDatabase> build() async {
     final path = name != null
         ? await sqfliteDatabaseFactory.getDatabasePath(name!)
@@ -62,8 +74,11 @@ class _$FlutterDatabase extends FlutterDatabase {
 
   TaskDao? _taskDaoInstance;
 
-  Future<sqflite.Database> open(String path, List<Migration> migrations,
-      [Callback? callback]) async {
+  Future<sqflite.Database> open(
+    String path,
+    List<Migration> migrations, [
+    Callback? callback,
+  ]) async {
     final databaseOptions = sqflite.OpenDatabaseOptions(
       version: 1,
       onConfigure: (database) async {
@@ -99,7 +114,7 @@ class _$FlutterDatabase extends FlutterDatabase {
 
   Future<void> _create(sqflite.Database database) async {
     await database.execute(
-        'CREATE TABLE IF NOT EXISTS `Task` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `message` TEXT NOT NULL)');
+        'CREATE TABLE IF NOT EXISTS `Task` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `message` TEXT NOT NULL, `isRead` INTEGER, `timestamp` INTEGER NOT NULL, `status` INTEGER, `type` TEXT)');
   }
 
   @override
@@ -109,27 +124,47 @@ class _$FlutterDatabase extends FlutterDatabase {
 }
 
 class _$TaskDao extends TaskDao {
-  _$TaskDao(this.database, this.changeListener)
-      : _queryAdapter = QueryAdapter(database, changeListener),
+  _$TaskDao(
+    this.database,
+    this.changeListener,
+  )   : _queryAdapter = QueryAdapter(database, changeListener),
         _taskInsertionAdapter = InsertionAdapter(
             database,
             'Task',
-            (Task item) =>
-                <String, Object?>{'id': item.id, 'message': item.message},
+            (Task item) => <String, Object?>{
+                  'id': item.id,
+                  'message': item.message,
+                  'isRead': item.isRead == null ? null : (item.isRead! ? 1 : 0),
+                  'timestamp': _dateTimeConverter.encode(item.timestamp),
+                  'status': item.status?.index,
+                  'type': _taskTypeConverter.encode(item.type)
+                },
             changeListener),
         _taskUpdateAdapter = UpdateAdapter(
             database,
             'Task',
             ['id'],
-            (Task item) =>
-                <String, Object?>{'id': item.id, 'message': item.message},
+            (Task item) => <String, Object?>{
+                  'id': item.id,
+                  'message': item.message,
+                  'isRead': item.isRead == null ? null : (item.isRead! ? 1 : 0),
+                  'timestamp': _dateTimeConverter.encode(item.timestamp),
+                  'status': item.status?.index,
+                  'type': _taskTypeConverter.encode(item.type)
+                },
             changeListener),
         _taskDeletionAdapter = DeletionAdapter(
             database,
             'Task',
             ['id'],
-            (Task item) =>
-                <String, Object?>{'id': item.id, 'message': item.message},
+            (Task item) => <String, Object?>{
+                  'id': item.id,
+                  'message': item.message,
+                  'isRead': item.isRead == null ? null : (item.isRead! ? 1 : 0),
+                  'timestamp': _dateTimeConverter.encode(item.timestamp),
+                  'status': item.status?.index,
+                  'type': _taskTypeConverter.encode(item.type)
+                },
             changeListener);
 
   final sqflite.DatabaseExecutor database;
@@ -147,25 +182,82 @@ class _$TaskDao extends TaskDao {
   @override
   Future<Task?> findTaskById(int id) async {
     return _queryAdapter.query('SELECT * FROM task WHERE id = ?1',
-        mapper: (Map<String, Object?> row) =>
-            Task(row['id'] as int?, row['message'] as String),
+        mapper: (Map<String, Object?> row) => Task(
+            row['id'] as int?,
+            row['isRead'] == null ? null : (row['isRead'] as int) != 0,
+            row['message'] as String,
+            _dateTimeConverter.decode(row['timestamp'] as int),
+            row['status'] == null
+                ? null
+                : TaskStatus.values[row['status'] as int],
+            _taskTypeConverter.decode(row['type'] as String?)),
         arguments: [id]);
   }
 
   @override
   Future<List<Task>> findAllTasks() async {
     return _queryAdapter.queryList('SELECT * FROM task',
-        mapper: (Map<String, Object?> row) =>
-            Task(row['id'] as int?, row['message'] as String));
+        mapper: (Map<String, Object?> row) => Task(
+            row['id'] as int?,
+            row['isRead'] == null ? null : (row['isRead'] as int) != 0,
+            row['message'] as String,
+            _dateTimeConverter.decode(row['timestamp'] as int),
+            row['status'] == null
+                ? null
+                : TaskStatus.values[row['status'] as int],
+            _taskTypeConverter.decode(row['type'] as String?)));
   }
 
   @override
   Stream<List<Task>> findAllTasksAsStream() {
     return _queryAdapter.queryListStream('SELECT * FROM task',
-        mapper: (Map<String, Object?> row) =>
-            Task(row['id'] as int?, row['message'] as String),
-        queryableName: 'Task',
+        mapper: (Map<String, Object?> row) => Task(
+            row['id'] as int?,
+            row['isRead'] == null ? null : (row['isRead'] as int) != 0,
+            row['message'] as String,
+            _dateTimeConverter.decode(row['timestamp'] as int),
+            row['status'] == null
+                ? null
+                : TaskStatus.values[row['status'] as int],
+            _taskTypeConverter.decode(row['type'] as String?)),
+        queryableName: 'task',
         isView: false);
+  }
+
+  @override
+  Stream<int?> findUniqueMessagesCountAsStream() {
+    return _queryAdapter.queryStream('SELECT DISTINCT COUNT(message) FROM task',
+        mapper: (Map<String, Object?> row) => row.values.first as int,
+        queryableName: 'task',
+        isView: false);
+  }
+
+  @override
+  Stream<List<Task>> findAllTasksByStatusAsStream(TaskStatus status) {
+    return _queryAdapter.queryListStream('SELECT * FROM task WHERE status = ?1',
+        mapper: (Map<String, Object?> row) => Task(
+            row['id'] as int?,
+            row['isRead'] == null ? null : (row['isRead'] as int) != 0,
+            row['message'] as String,
+            _dateTimeConverter.decode(row['timestamp'] as int),
+            row['status'] == null
+                ? null
+                : TaskStatus.values[row['status'] as int],
+            _taskTypeConverter.decode(row['type'] as String?)),
+        arguments: [status.index],
+        queryableName: 'task',
+        isView: false);
+  }
+
+  @override
+  Future<int?> updateTypeById(
+    TaskType type,
+    int id,
+  ) async {
+    return _queryAdapter.query(
+        'UPDATE OR ABORT Task SET type = ?1 WHERE id = ?2',
+        mapper: (Map<String, Object?> row) => row.values.first as int,
+        arguments: [type.index, id]);
   }
 
   @override
@@ -198,3 +290,7 @@ class _$TaskDao extends TaskDao {
     await _taskDeletionAdapter.deleteList(tasks);
   }
 }
+
+// ignore_for_file: unused_element
+final _dateTimeConverter = DateTimeConverter();
+final _taskTypeConverter = TaskTypeConverter();

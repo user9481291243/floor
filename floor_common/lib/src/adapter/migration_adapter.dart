@@ -1,0 +1,30 @@
+import 'package:floor_common/src/migration.dart';
+import 'package:sqflite_common/sqlite_api.dart';
+
+class MissingMigrationException implements Exception {}
+
+// ignore: avoid_classes_with_only_static_members
+abstract class MigrationAdapter {
+  /// Runs the given [migrations] for migrating the database schema and data.
+  static Future<void> runMigrations(
+    final Database migrationDatabase,
+    final int startVersion,
+    final int endVersion,
+    final List<Migration> migrations,
+  ) async {
+    final relevantMigrations = migrations
+        .where((migration) => migration.startVersion >= startVersion)
+        .toList()
+      ..sort(
+          (first, second) => first.startVersion.compareTo(second.startVersion));
+
+    if (relevantMigrations.isEmpty ||
+        relevantMigrations.last.endVersion != endVersion) {
+      throw MissingMigrationException();
+    }
+
+    for (final migration in relevantMigrations) {
+      await migration.migrate(migrationDatabase);
+    }
+  }
+}

@@ -1,9 +1,9 @@
 import 'package:analyzer/dart/element/element.dart';
 import 'package:build_test/build_test.dart';
 import 'package:floor_annotation/floor_annotation.dart' as annotations;
-import 'package:floor_generator/misc/constants.dart';
 import 'package:floor_generator/processor/entity_processor.dart';
 import 'package:floor_generator/processor/error/entity_processor_error.dart';
+import 'package:floor_generator/processor/error/queryable_processor_error.dart';
 import 'package:floor_generator/processor/field_processor.dart';
 import 'package:floor_generator/value_object/entity.dart';
 import 'package:floor_generator/value_object/foreign_key.dart';
@@ -13,7 +13,6 @@ import 'package:floor_generator/value_object/primary_key.dart';
 import 'package:source_gen/source_gen.dart';
 import 'package:test/test.dart';
 
-import '../fakes.dart';
 import '../test_utils.dart';
 
 void main() {
@@ -67,7 +66,7 @@ void main() {
       primaryKeys:null,
       withoutRowid:null,
       )
-      @Fts3(tokenizerArgs:null)
+      @Fts3()
       class Person {
         @primaryKey
         final int id;
@@ -184,6 +183,51 @@ void main() {
     expect(actual, equals(expected));
   });
 
+  test(
+      'Process entity with named constructor declarations first, before unnamed ones.',
+      () async {
+    final classElement = await createClassElement('''
+      @entity
+      class Person {
+        @primaryKey
+        final int id;
+      
+        final String name;
+
+        factory Person.from(Person other) {
+          return Person(other.id, other.name);
+        }
+      
+        Person(this.id, this.name);
+      }
+    ''');
+
+    final actual = EntityProcessor(classElement, {}).process();
+
+    const name = 'Person';
+    final fields = classElement.fields
+        .map((fieldElement) => FieldProcessor(fieldElement, null).process())
+        .toList();
+    final primaryKey = PrimaryKey([fields[0]], false);
+    const foreignKeys = <ForeignKey>[];
+    const indices = <Index>[];
+    const constructor = "Person(row['id'] as int, row['name'] as String)";
+    const valueMapping = "<String, Object?>{'id': item.id, 'name': item.name}";
+    final expected = Entity(
+      classElement,
+      name,
+      fields,
+      primaryKey,
+      foreignKeys,
+      indices,
+      false,
+      constructor,
+      valueMapping,
+      null,
+    );
+    expect(actual, equals(expected));
+  });
+
   group('foreign keys', () {
     test('foreign key holds correct values', () async {
       final classElements = await _createClassElements('''
@@ -232,50 +276,6 @@ void main() {
         annotations.ForeignKeyAction.setNull,
       );
       expect(actual, equals(expected));
-    });
-
-    test('error with wrong onUpdate Annotation', () async {
-      final classElements = await _createClassElements('''
-          @entity
-          class Person {
-            @primaryKey
-            final int id;
-            
-            final String name;
-          
-            Person(this.id, this.name);
-          }
-          
-          @Entity(
-            foreignKeys: [
-              ForeignKey(
-                childColumns: ['owner_id'],
-                parentColumns: ['id'],
-                entity: Person,
-                onUpdate: null
-                onDelete: ForeignKeyAction.setNull,
-              )
-            ],
-          )
-          class Dog {
-            @primaryKey
-            final int id;
-          
-            final String name;
-          
-            @ColumnInfo(name: 'owner_id')
-            final int ownerId;
-          
-            Dog(this.id, this.name, this.ownerId);
-          }
-      ''');
-
-      final processor = EntityProcessor(classElements[1], {});
-      expect(
-          processor.process,
-          throwsInvalidGenerationSourceError(
-              EntityProcessorError(classElements[1]).wrongForeignKeyAction(
-                  FakeDartObject(), ForeignKeyField.onUpdate)));
     });
   });
 
@@ -411,6 +411,56 @@ void main() {
           '}';
       expect(actual, equals(expected));
     });
+
+    test('Non-nullable enum value mapping', () async {
+      final classElement = await createClassElement('''
+      
+      $characterType
+      
+      @entity
+      class Person {
+        @primaryKey
+        final int id;
+      
+        final CharacterType someType;
+      
+        Person(this.id, this.someType);
+      }
+    ''');
+
+      final actual = EntityProcessor(classElement, {}).process().valueMapping;
+
+      const expected = '<String, Object?>{'
+          "'id': item.id, "
+          "'someType': item.someType.index"
+          '}';
+      expect(actual, equals(expected));
+    });
+
+    test('Nullable enum value mapping', () async {
+      final classElement = await createClassElement('''
+      
+      $characterType
+      
+      @entity
+      class Person {
+        @primaryKey
+        final int id;
+      
+        final CharacterType? someType;
+      
+        Person(this.id, this.someType);
+      }
+    ''');
+
+      final actual = EntityProcessor(classElement, {}).process().valueMapping;
+
+      const expected = '<String, Object?>{'
+          "'id': item.id, "
+          "'someType': item.someType?.index"
+          '}';
+      expect(actual, equals(expected));
+    });
   });
 
   group('expected errors', () {
@@ -470,7 +520,6 @@ void main() {
                 childColumns: ['owner_id'],
                 parentColumns: [],
                 entity: Person,
-                onUpdate: null
                 onDelete: ForeignKeyAction.setNull,
               )
             ],
@@ -512,7 +561,6 @@ void main() {
                 childColumns: [],
                 parentColumns: ['id'],
                 entity: Person,
-                onUpdate: null
                 onDelete: ForeignKeyAction.setNull,
               )
             ],
@@ -579,7 +627,6 @@ void main() {
                 childColumns: ['owner_id'],
                 parentColumns: ['id'],
                 entity: Person,
-                onUpdate: null
                 onDelete: ForeignKeyAction.setNull,
               )
             ],
@@ -675,6 +722,31 @@ void main() {
           throwsInvalidGenerationSourceError(
               EntityProcessorError(classElement).autoIncrementInWithoutRowid));
     });
+
+    test('missing unnamed constructor.', () async {
+      final classElement = await createClassElement('''
+      @entity
+      class Person {
+        @primaryKey
+        final int id;
+      
+        final String name;
+
+        factory Person.from(Person other) {
+          return Person(other.id, other.name);
+        }
+      }
+    ''');
+
+      final actual = EntityProcessor(classElement, {});
+
+      expect(
+        actual.process,
+        throwsInvalidGenerationSourceError(
+          QueryableProcessorError(classElement).missingUnnamedConstructor,
+        ),
+      );
+    });
   });
 }
 
@@ -686,7 +758,10 @@ Future<List<ClassElement>> _createClassElements(final String classes) async {
       
       $classes
       ''', (resolver) async {
-    return LibraryReader((await resolver.findLibraryByName('test'))!);
+    return resolver
+        .findLibraryByName('test')
+        .then((value) => ArgumentError.checkNotNull(value))
+        .then((value) => LibraryReader(value));
   });
 
   return library.classes.toList();
