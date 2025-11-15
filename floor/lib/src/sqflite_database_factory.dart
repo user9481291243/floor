@@ -9,14 +9,14 @@ import 'package:path_provider/path_provider.dart';
 
 // infers factory as nullable without explicit type definition
 final DatabaseFactory sqfliteDatabaseFactory = () {
-  //return databaseFactory; //test
+  return databaseFactory; //test
   if (kIsWeb) {
     return databaseFactoryFfiWeb;
   } else if (Platform.isAndroid || Platform.isIOS) {
     return databaseFactory;
   } else if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
     sqfliteFfiInit();
-    return databaseFactoryFfiNoIsolate;
+    return databaseFactoryFfi;
   } else {
     throw UnsupportedError(
       'Platform ${Platform.operatingSystem} is not supported by Floor.',
