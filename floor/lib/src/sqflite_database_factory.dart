@@ -9,7 +9,7 @@ import 'package:path_provider/path_provider.dart';
 
 // infers factory as nullable without explicit type definition
 final DatabaseFactory sqfliteDatabaseFactory = () {
-  return databaseFactory; //test
+  //return databaseFactory; //test
   if (kIsWeb) {
     return databaseFactoryFfiWeb;
   } else if (Platform.isAndroid || Platform.isIOS) {
