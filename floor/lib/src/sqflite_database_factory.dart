@@ -16,7 +16,7 @@ final DatabaseFactory sqfliteDatabaseFactory = () {
     return databaseFactory;
   } else if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
     sqfliteFfiInit();
-    return databaseFactoryFfi;
+    return databaseFactoryFfiNoIsolate;
   } else {
     throw UnsupportedError(
       'Platform ${Platform.operatingSystem} is not supported by Floor.',
