@@ -31,12 +31,12 @@ dependencies:
   sqflite_common_ffi: ^2.3.2+1
   sqflite_common_ffi_web: ^0.3.0
   sqlparser: ^0.34.1
-  path_provider: ^2.0.15
+  path_provider: ^2.1.5
   path_provider_aurora:
     git:
-      url: https://gitlab.com/omprussia/flutter/flutter-plugins.git
-      ref: path_provider_aurora-0.5.0
-      path: packages/path_provider/path_provider_aurora
+      url: https://developer.auroraos.ru/git/flutter/packages.git
+      path: packages/path_provider_aurora
+      ref: aurora-path_provider_aurora-0.6.1
   
 
 dev_dependencies:
